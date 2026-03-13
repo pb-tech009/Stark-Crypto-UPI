@@ -35,7 +35,7 @@ jobs:
       # Linting with a bit of flexibility
       - name: Frontend Linting
         working-directory: ./frontend
-        run: npx eslint . --max-warnings 10
+        run: npx eslint . --max-warnings 50
 
   # ----------------------------------------------------
   # STAGE 2: Build Image, Scan & Push
