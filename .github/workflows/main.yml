@@ -29,13 +29,13 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          cd backend && npm install --package-lock-only || npm install
-          cd ../frontend && npm install --package-lock-only --legacy-peer-deps || npm install --legacy-peer-deps
+          cd backend && npm install
+          cd ../frontend && npm install --legacy-peer-deps
 
       # Linting with a bit of flexibility
       - name: Frontend Linting
         working-directory: ./frontend
-        run: npx eslint . --ext js,jsx,ts,tsx --max-warnings 10 # 10 warnings sudhi allow karse
+        run: npx eslint . --max-warnings 10
 
   # ----------------------------------------------------
   # STAGE 2: Build Image, Scan & Push
