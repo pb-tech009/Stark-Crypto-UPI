@@ -42,15 +42,19 @@ jobs:
   # ----------------------------------------------------
   build-scan-push:
     needs: code-security-and-linting
-    runs-on: ubuntu-latest
+    env:
+      DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # ==========================================
-      # LOGIN SECTION (Docker Hub Enabled by Default)
-      # ==========================================
-      
+      - name: Validate Secrets
+        run: |
+          if [ -z "$DOCKERHUB_USER" ]; then
+            echo "Error: DOCKERHUB_USERNAME secret is not set!"
+            exit 1
+          fi
+
       # --- DOCKER HUB LOGIN ---
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -58,27 +62,11 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # --- AWS ECR LOGIN (FUTURE USE - KEEP COMMENTED) ---
-      # - name: Configure AWS credentials
-      #   uses: aws-actions/configure-aws-credentials@v2
-      #   with:
-      #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      #     aws-region: us-east-1
-      # - name: Login to Amazon ECR
-      #   id: login-ecr
-      #   uses: aws-actions/amazon-ecr-login@v2
-
       # ==========================================
       # BACKEND: Build -> Scan -> Push
       # ==========================================
       - name: Build Backend Image
-        run: |
-          if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
-            echo "Error: DOCKERHUB_USERNAME secret is not set in GitHub Secrets!"
-            exit 1
-          fi
-          docker build -t "${{ secrets.DOCKERHUB_USERNAME }}/stark-backend:latest" ./backend
+        run: docker build -t "$DOCKERHUB_USER/stark-backend:latest" ./backend
           
       - name: Run Trivy Scan (Backend)
         uses: aquasecurity/trivy-action@master
@@ -95,7 +83,7 @@ jobs:
       # FRONTEND: Build -> Scan -> Push
       # ==========================================
       - name: Build Frontend Image
-        run: docker build -t "${{ secrets.DOCKERHUB_USERNAME }}/stark-frontend:latest" ./frontend
+        run: docker build -t "$DOCKERHUB_USER/stark-frontend:latest" ./frontend
 
       - name: Run Trivy Scan (Frontend)
         uses: aquasecurity/trivy-action@master
@@ -106,4 +94,4 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Push Frontend Image
-        run: docker push "${{ secrets.DOCKERHUB_USERNAME }}/stark-frontend:latest"
+        run: docker push "$DOCKERHUB_USER/stark-frontend:latest"
