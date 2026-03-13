@@ -42,6 +42,7 @@ jobs:
   # ----------------------------------------------------
   build-scan-push:
     needs: code-security-and-linting
+    runs-on: ubuntu-latest
     env:
       DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
     steps:
