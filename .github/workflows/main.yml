@@ -1,0 +1,104 @@
+name: Production-Ready Build, Scan & Push
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  # ----------------------------------------------------
+  # STAGE 1: Code Quality & Security Scan
+  # ----------------------------------------------------
+  code-security-and-linting:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Exposed Secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true # Sharuat ma pipeline stop na thay etle
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Dependencies
+        run: |
+          cd backend && npm install --package-lock-only || npm install
+          cd ../frontend && npm install --package-lock-only || npm install
+
+      # Linting with a bit of flexibility
+      - name: Frontend Linting
+        working-directory: ./frontend
+        run: npx eslint . --ext js,jsx,ts,tsx --max-warnings 10 # 10 warnings sudhi allow karse
+
+  # ----------------------------------------------------
+  # STAGE 2: Build Image, Scan & Push
+  # ----------------------------------------------------
+  build-scan-push:
+    needs: code-security-and-linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # ==========================================
+      # LOGIN SECTION (Docker Hub Enabled by Default)
+      # ==========================================
+      
+      # --- DOCKER HUB LOGIN ---
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # --- AWS ECR LOGIN (FUTURE USE - KEEP COMMENTED) ---
+      # - name: Configure AWS credentials
+      #   uses: aws-actions/configure-aws-credentials@v2
+      #   with:
+      #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      #     aws-region: us-east-1
+      # - name: Login to Amazon ECR
+      #   id: login-ecr
+      #   uses: aws-actions/amazon-ecr-login@v2
+
+      # ==========================================
+      # BACKEND: Build -> Scan -> Push
+      # ==========================================
+      - name: Build Backend Image
+        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/stark-backend:latest ./backend
+          
+      - name: Run Trivy Scan (Backend)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ secrets.DOCKERHUB_USERNAME }}/stark-backend:latest'
+          format: 'table'
+          exit-code: '0' # Learning phase ma pipeline fail nahi kare, khali report batshe
+          severity: 'CRITICAL,HIGH'
+
+      - name: Push Backend Image
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/stark-backend:latest
+
+      # ==========================================
+      # FRONTEND: Build -> Scan -> Push
+      # ==========================================
+      - name: Build Frontend Image
+        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/stark-frontend:latest ./frontend
+
+      - name: Run Trivy Scan (Frontend)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ secrets.DOCKERHUB_USERNAME }}/stark-frontend:latest'
+          format: 'table'
+          exit-code: '0' 
+          severity: 'CRITICAL,HIGH'
+
+      - name: Push Frontend Image
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/stark-frontend:latest
